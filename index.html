@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tra cứu Danh mục Nghề nghiệp Việt Nam</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f4f6f9;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .search-container {
+            background: #ffffff;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            margin-top: 30px;
+        }
+        .result-card {
+            border-left: 5px solid #0d6efd;
+            transition: transform 0.2s;
+        }
+        .result-card:hover {
+            background-color: #f8f9fa;
+        }
+        .level2-badge {
+            background-color: #e9ecef;
+            color: #495057;
+            font-weight: bold;
+            padding: 5px 10px;
+            border-radius: 4px;
+            display: inline-block;
+            margin-top: 5px;
+        }
+        .loading {
+            display: none;
+            text-align: center;
+            margin: 20px 0;
+        }
+        mark {
+            background-color: #fff3cd;
+            padding: 0;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container mb-5">
+    <!-- Header -->
+    <div class="text-center mt-4 mb-4">
+        <h1 class="text-primary fw-bold">Tra cứu Nghề Nghiệp</h1>
+        <p class="text-muted">Nhập tên nghề để tìm ra nhóm Cấp 2 quản lý nghề đó</p>
+    </div>
+
+    <!-- Search Box -->
+    <div class="search-container">
+        <div class="input-group input-group-lg">
+            <span class="input-group-text bg-white border-end-0"><i class="bi bi-search">🔍</i></span>
+            <input type="text" class="form-control border-start-0" id="searchInput" placeholder="Ví dụ: Bác sĩ, Lái xe, Giáo viên..." disabled>
+        </div>
+        <div id="loadingStatus" class="loading text-primary">
+            <div class="spinner-border spinner-border-sm" role="status"></div> Đang tải dữ liệu...
+        </div>
+        <div id="dataInfo" class="text-end text-muted mt-2 small"></div>
+    </div>
+
+    <!-- Results Area -->
+    <div id="resultsArea" class="mt-4">
+        <!-- Kết quả sẽ hiện ở đây -->
+    </div>
+</div>
+
+<!-- Bootstrap JS -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+    let jobData = [];
+    const searchInput = document.getElementById('searchInput');
+    const resultsArea = document.getElementById('resultsArea');
+    const loadingStatus = document.getElementById('loadingStatus');
+    const dataInfo = document.getElementById('dataInfo');
+
+    // 1. Tự động tải dữ liệu khi mở trang
+    window.onload = async function() {
+        loadingStatus.style.display = 'block';
+        try {
+            const response = await fetch('data.txt');
+            if (!response.ok) throw new Error("Không thể đọc file data.txt");
+            const text = await response.text();
+            processData(text);
+        } catch (error) {
+            resultsArea.innerHTML = `<div class="alert alert-danger">Lỗi: ${error.message}. Hãy chắc chắn file data.txt nằm cùng thư mục với index.html</div>`;
+            loadingStatus.style.display = 'none';
+        }
+    };
+
+    // 2. Xử lý dữ liệu văn bản thành mảng Object
+    function processData(text) {
+        const lines = text.split('\n');
+        let currentLevel2 = { code: 'N/A', name: 'Chưa xác định' };
+
+        // Bỏ qua dòng tiêu đề đầu tiên
+        for (let i = 1; i < lines.length; i++) {
+            const line = lines[i].trim();
+            if (!line) continue;
+
+            const cols = line.split('\t');
+            
+            // Cấu trúc file: C1(0) | C2(1) | C3(2) | C4(3) | C5(4) | Tên(5)
+            // Lấy tên nghề (cột cuối cùng hoặc cột 5)
+            let jobName = cols.length >= 6 ? cols[5].trim() : cols[cols.length - 1]?.trim();
+            if (!jobName) continue;
+
+            const c2 = cols[1]?.trim();
+
+            // Nếu dòng này định nghĩa một Cấp 2 mới, cập nhật biến currentLevel2
+            if (c2) {
+                currentLevel2 = {
+                    code: c2,
+                    name: jobName
+                };
+            }
+
+            // Lưu dữ liệu vào mảng
+            jobData.push({
+                name: jobName,
+                level2Code: currentLevel2.code,
+                level2Name: currentLevel2.name,
+                rawLine: line // Lưu để debug nếu cần
+            });
+        }
+
+        // Hoàn tất tải
+        loadingStatus.style.display = 'none';
+        searchInput.disabled = false;
+        searchInput.focus();
+        dataInfo.innerText = `Đã nạp ${jobData.length.toLocaleString()} đầu mục nghề nghiệp.`;
+    }
+
+    // 3. Hàm tìm kiếm
+    searchInput.addEventListener('input', function(e) {
+        const keyword = e.target.value.toLowerCase();
+        resultsArea.innerHTML = '';
+
+        if (keyword.length < 2) return; // Chỉ tìm khi gõ trên 2 ký tự
+
+        // Lọc dữ liệu (Tối đa 50 kết quả để không bị lag)
+        const matches = jobData.filter(item => item.name.toLowerCase().includes(keyword)).slice(0, 50);
+
+        if (matches.length === 0) {
+            resultsArea.innerHTML = '<div class="text-center text-muted py-3">Không tìm thấy kết quả nào.</div>';
+            return;
+        }
+
+        // Hiển thị kết quả
+        matches.forEach(item => {
+            const highlightedName = highlightText(item.name, keyword);
+            
+            const div = document.createElement('div');
+            div.className = 'card mb-2 result-card shadow-sm';
+            div.innerHTML = `
+                <div class="card-body py-2">
+                    <h5 class="card-title mb-1 text-primary">${highlightedName}</h5>
+                    <div class="level2-badge border">
+                        <small class="text-secondary">Thuộc Cấp 2:</small> 
+                        <strong>${item.level2Code}</strong> - ${item.level2Name}
+                    </div>
+                </div>
+            `;
+            resultsArea.appendChild(div);
+        });
+    });
+
+    // Hàm tô đậm từ khóa
+    function highlightText(text, keyword) {
+        const regex = new RegExp(`(${keyword})`, 'gi');
+        return text.replace(regex, '<mark>$1</mark>');
+    }
+</script>
+
+</body>
+</html>
